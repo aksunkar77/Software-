@@ -1,9 +1,10 @@
-import { useState, useMemo, type ReactNode } from "react";
-import { Building2, Search } from "lucide-react";
+import { useState, useMemo, useCallback, type ReactNode } from "react";
+import { Building2, Search, Sparkles } from "lucide-react";
 import { rooms, CURRENT_TIME_DEFAULT, type Room } from "@/data/rooms";
 import { checkAvailability, getSlotMessages, MAX_DURATION, type AvailabilityResult } from "@/lib/availability";
 import { filterRooms, type RoomFilter } from "@/lib/room-filter";
 import { minutesToHHMM, formatDuration } from "@/lib/time";
+import { explainAvailability, deriveReasonCode, type ExplanationResult } from "@/lib/explanation";
 import TimePicker from "@/components/TimePicker";
 import RoomSelector from "@/components/RoomSelector";
 import RoomFilters from "@/components/RoomFilters";
@@ -11,6 +12,7 @@ import NoMatchingRooms from "@/components/NoMatchingRooms";
 import ResultBanner from "@/components/ResultBanner";
 import Timeline from "@/components/Timeline";
 import BookingList from "@/components/BookingList";
+import ExplanationPanel from "@/components/ExplanationPanel";
 
 function SectionCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
@@ -29,6 +31,8 @@ export default function App() {
   const [endTime, setEndTime] = useState(660);
   const [currentTime, setCurrentTime] = useState(CURRENT_TIME_DEFAULT);
   const [result, setResult] = useState<AvailabilityResult | null>(null);
+  const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
 
   const matchingRooms = useMemo(() => filterRooms(rooms, roomFilter), [roomFilter]);
 
@@ -43,11 +47,29 @@ export default function App() {
   const handleCheck = () => {
     if (!selectedRoom) return;
     setResult(checkAvailability(selectedRoom, startTime, endTime, currentTime));
+    setExplanation(null);
   };
+
+  const handleExplain = useCallback(async () => {
+    if (!selectedRoom || !result) return;
+    setExplanationLoading(true);
+    setExplanation(null);
+    const code = deriveReasonCode(result);
+    const res = await explainAvailability({
+      roomName: selectedRoom.name,
+      startTime: minutesToHHMM(startTime),
+      endTime: minutesToHHMM(endTime),
+      isAvailable: result.available,
+      reasonCode: code,
+    }, { delayMs: 400 });
+    setExplanation(res);
+    setExplanationLoading(false);
+  }, [selectedRoom, result, startTime, endTime]);
 
   const handleRoomChange = (id: string) => {
     setSelectedRoomId(id);
     setResult(null);
+    setExplanation(null);
   };
 
   const handleFilterChange = (next: RoomFilter) => {
@@ -55,6 +77,7 @@ export default function App() {
     setRoomFilter(next);
     setSelectedRoomId(matches.some((r) => r.id === selectedRoomId) ? selectedRoomId : (matches[0]?.id ?? ""));
     setResult(null);
+    setExplanation(null);
   };
 
   const messages = getSlotMessages(startTime, endTime, currentTime);
@@ -137,6 +160,15 @@ export default function App() {
           {result && (
             <div className="mt-5">
               <ResultBanner result={result} />
+              <button
+                onClick={handleExplain}
+                disabled={explanationLoading}
+                className="mt-3 flex items-center justify-center gap-2 w-full rounded-xl border-2 border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50 active:scale-[0.99] focus:ring-2 focus:ring-sky-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="w-4 h-4" />
+                Explain Availability
+              </button>
+              <ExplanationPanel result={explanation} loading={explanationLoading} />
             </div>
           )}
         </div>
