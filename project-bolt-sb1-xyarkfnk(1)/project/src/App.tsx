@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { Building2, Search, Sparkles } from "lucide-react";
 import { rooms, CURRENT_TIME_DEFAULT, type Room } from "@/data/rooms";
 import { checkAvailability, getSlotMessages, MAX_DURATION, type AvailabilityResult } from "@/lib/availability";
@@ -33,6 +33,7 @@ export default function App() {
   const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
   const [explanationLoading, setExplanationLoading] = useState(false);
+  const explanationReqId = useRef(0);
 
   const matchingRooms = useMemo(() => filterRooms(rooms, roomFilter), [roomFilter]);
 
@@ -44,14 +45,22 @@ export default function App() {
   const duration = endTime - startTime;
   const validSlot = startTime < endTime;
 
+  const cancelExplanation = () => {
+    explanationReqId.current += 1;
+    setExplanation(null);
+    setExplanationLoading(false);
+  };
+
   const handleCheck = () => {
     if (!selectedRoom) return;
     setResult(checkAvailability(selectedRoom, startTime, endTime, currentTime));
-    setExplanation(null);
+    cancelExplanation();
   };
 
   const handleExplain = useCallback(async () => {
     if (!selectedRoom || !result) return;
+    const reqId = explanationReqId.current + 1;
+    explanationReqId.current = reqId;
     setExplanationLoading(true);
     setExplanation(null);
     const code = deriveReasonCode(result);
@@ -62,6 +71,7 @@ export default function App() {
       isAvailable: result.available,
       reasonCode: code,
     }, { delayMs: 400 });
+    if (explanationReqId.current !== reqId) return;
     setExplanation(res);
     setExplanationLoading(false);
   }, [selectedRoom, result, startTime, endTime]);
@@ -69,7 +79,7 @@ export default function App() {
   const handleRoomChange = (id: string) => {
     setSelectedRoomId(id);
     setResult(null);
-    setExplanation(null);
+    cancelExplanation();
   };
 
   const handleFilterChange = (next: RoomFilter) => {
@@ -77,7 +87,7 @@ export default function App() {
     setRoomFilter(next);
     setSelectedRoomId(matches.some((r) => r.id === selectedRoomId) ? selectedRoomId : (matches[0]?.id ?? ""));
     setResult(null);
-    setExplanation(null);
+    cancelExplanation();
   };
 
   const messages = getSlotMessages(startTime, endTime, currentTime);

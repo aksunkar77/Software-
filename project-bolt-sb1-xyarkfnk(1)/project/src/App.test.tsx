@@ -12,6 +12,7 @@ const roomOptionNames = () =>
     .map((option) => option.textContent ?? "");
 const checkButton = () => screen.getByRole("button", { name: /Check Availability/ });
 const attendeeInput = () => screen.getByLabelText("Number of Attendees") as HTMLInputElement;
+const explainButton = () => screen.getByRole("button", { name: /Explain Availability/ });
 
 describe("room switching", () => {
   it("clears the old result and checks the newly selected room's own bookings", () => {
@@ -103,5 +104,67 @@ describe("empty state", () => {
     fireEvent.change(attendeeInput(), { target: { value: "1" } });
     expect(screen.queryByText("No rooms match your filters")).toBeNull();
     expect(screen.getByLabelText("Select Room")).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI explanation — UI integration tests
+// ---------------------------------------------------------------------------
+
+describe("AI explanation UI", () => {
+  it("does not show the Explain button before checking availability", () => {
+    render(<App />);
+    expect(screen.queryByRole("button", { name: /Explain Availability/ })).toBeNull();
+  });
+
+  it("shows the Explain button after checking availability", () => {
+    render(<App />);
+    fireEvent.click(checkButton());
+    expect(explainButton()).toBeTruthy();
+  });
+
+  it("renders an AI-generated explanation labeled correctly after clicking Explain", async () => {
+    render(<App />);
+    fireEvent.click(checkButton());
+    fireEvent.click(explainButton());
+
+    // Wait for the async explanation to appear
+    const label = await screen.findByText(/AI-generated explanation/i, undefined, { timeout: 3000 });
+    expect(label).toBeTruthy();
+  });
+
+  it("clears the explanation when switching rooms", () => {
+    render(<App />);
+    fireEvent.click(checkButton());
+    fireEvent.click(explainButton());
+
+    // Switch room — should clear both result and explanation
+    fireEvent.change(roomSelect(), { target: { value: "lib-b" } });
+    expect(screen.queryByText(/AI-generated explanation/i)).toBeNull();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+    expect(screen.queryByText("Available")).toBeNull();
+  });
+
+  it("clears the explanation when the attendee filter changes", () => {
+    render(<App />);
+    fireEvent.click(checkButton());
+    fireEvent.click(explainButton());
+
+    fireEvent.change(attendeeInput(), { target: { value: "2" } });
+    expect(screen.queryByText(/AI-generated explanation/i)).toBeNull();
+    expect(screen.queryByText("Unavailable")).toBeNull();
+  });
+
+  it("clears the previous explanation when re-checking availability", () => {
+    render(<App />);
+    fireEvent.click(checkButton());
+    fireEvent.click(explainButton());
+
+    // Click Check Availability again — old explanation should be cleared
+    // (button still present, explanation panel cleared until Explain clicked again)
+    fireEvent.click(checkButton());
+    // The result banner should still show (Unavailable), but no AI explanation panel
+    expect(screen.queryByText(/AI-generated explanation/i)).toBeNull();
+    expect(screen.getByText("Unavailable")).toBeTruthy();
   });
 });
