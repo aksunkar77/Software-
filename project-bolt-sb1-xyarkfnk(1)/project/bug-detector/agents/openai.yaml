@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bug Detector"
+  short_description: "Diagnose booking bugs using code and test evidence."
+  default_prompt: "Use the bug-detector skill to inspect the booking code, reproduce the reported defect, and suggest a minimal fix with a regression test. Do not edit code yet."
